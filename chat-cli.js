@@ -141,26 +141,27 @@ async function streamChat(userInput) {
 
   process.stdout.write(`${ai}: `);
 
-  let full = '';
-  const stream = await client.chat.completions.create({
-    model: MODEL,
-    messages,
-    stream: true
-  });
-
-  for await (const part of stream) {
-    const delta = part?.choices?.[0]?.delta?.content;
-    if (delta) {
-      full += delta;
-      renderAssistantChunk(delta);
-    }
+  try {
+    await streamChatCore({
+      client,
+      model: MODEL,
+      messages,
+      onStart: () => {},
+      onDelta: (delta) => {
+        // 코드블록 가독성: ``` 앞뒤 줄바꿈 (기존 로직 재사용)
+        renderAssistantChunk(delta);
+      },
+      onDone: (full) => {
+        if (full && !full.endsWith('\n')) process.stdout.write('\n');
+        messages.push({ role: 'assistant', content: full || '' });
+        persistSession();
+      }
+    });
+  } catch (err) {
+    process.stdout.write('\n');
+    console.error(chalk.red(`\n[Error] ${err?.message || err}\n`));
   }
-  if (!full.endsWith('\n')) process.stdout.write('\n');
-
-  messages.push({ role: 'assistant', content: full });
-  persistSession();
 }
-
 // ────────────────────────────────────────────────────────────
 async function handleCommand(text) {
   const [cmd, ...rest] = text.split(' ');
